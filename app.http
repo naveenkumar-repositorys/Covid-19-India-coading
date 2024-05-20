@@ -41,6 +41,20 @@ Content-Type: application/json
   "deaths": 104
 }
 
+###
+
+GET http://localhost:3000/states/20/stats/
+
+###
+
+GET http://localhost:3000/districts/20/details/
+
+
+
+
+
+
+
 
 
 
