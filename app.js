@@ -28,6 +28,21 @@ let convertDbDictObjectToResponseDictObject = (eachItem) => {
   };
 };
 
+let conTotalDictsOfStateToResObject = (dbResponse) => {
+  return {
+    totalCases: dbResponse.total_cases,
+    totalCured: dbResponse.total_cured,
+    totalActive: dbResponse.total_active,
+    totalDeaths: dbResponse.total_deaths,
+  };
+};
+
+let convertStateNameToResponseObject = (dbResponse) => {
+  return {
+    stateName: dbResponse.state_name,
+  };
+};
+
 let initializationDbToServer = async () => {
   try {
     db = await open({
@@ -70,7 +85,7 @@ app.get("/states/:stateId/", async (request, response) => {
     convertDbObjectToResponseObject(eachItem)
   );
   //console.log(responseObject);
-  response.send(responseObject);
+  response.send(responseObject[0]);
 });
 
 //API-3
@@ -102,7 +117,7 @@ app.get("/districts/:districtId/", async (request, response) => {
     convertDbDictObjectToResponseDictObject(eachItem)
   );
   //console.log(responseObject);
-  response.send(responseObject);
+  response.send(responseObject[0]);
 });
 
 //API-5
@@ -139,3 +154,28 @@ app.put("/districts/:districtId/", async (request, response) => {
 });
 
 //API-7
+
+app.get("/states/:stateId/stats/", async (request, response) => {
+  let { stateId } = request.params;
+  let totalDictsOfState = `SELECT district_name,SUM(cases)AS total_cases,SUM(cured)AS total_cured,SUM(active)As total_active,SUM(deaths)As total_deaths
+    FROM district
+    WHERE state_id = ${stateId}
+    GROUP BY state_id;`;
+  let dbResponse = await db.get(totalDictsOfState);
+  //console.log(conTotalDictsOfStateToResObject(dbResponse));
+  response.send(conTotalDictsOfStateToResObject(dbResponse));
+});
+
+//API-8
+
+app.get("/districts/:districtId/details/", async (request, response) => {
+  let { districtId } = request.params;
+  let findStateName = `SELECT state_name
+    FROM state NATURAL JOIN district
+    WHERE district_id= ${districtId};`;
+  let dbResponse = await db.get(findStateName);
+  //console.log(convertStateNameToResponseObject(dbResponse));
+  response.send(convertStateNameToResponseObject(dbResponse));
+});
+
+module.exports = app;
