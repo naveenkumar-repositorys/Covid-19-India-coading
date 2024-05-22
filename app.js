@@ -1,145 +1,181 @@
 let express = require("express");
+let path = require("path");
 let { open } = require("sqlite");
 let sqlite3 = require("sqlite3");
-let path = require("path");
 
+let dbPath = path.join(__dirname, "covid19India.db");
 let app = express();
-let dbPath = path.join(__dirname, "cricketMatchDetails.db");
+app.use(express.json());
 let db = null;
 
-app.use(express.json());
-
-let convertDbObjectToResponseObject = (dbResponse) => {
+let convertDbObjectToResponseObject = (dbObject) => {
   return {
-    playerId: dbResponse.player_id,
-    playerName: dbResponse.player_name,
+    stateId: dbObject.state_id,
+    stateName: dbObject.state_name,
+    population: dbObject.population,
   };
 };
 
-let convertingDbObjToresObj = (dbResponse) => {
+let convertDbDictObjectToResponseDictObject = (eachItem) => {
   return {
-    matchId: dbResponse.match_id,
-    match: dbResponse.match,
-    year: dbResponse.year,
+    districtId: eachItem.district_id,
+    districtName: eachItem.district_name,
+    stateId: eachItem.state_id,
+    cases: eachItem.cases,
+    cured: eachItem.cured,
+    active: eachItem.active,
+    deaths: eachItem.deaths,
   };
 };
 
-let initializeDbAndServer = async () => {
+let conTotalDictsOfStateToResObject = (dbResponse) => {
+  return {
+    totalCases: dbResponse.total_cases,
+    totalCured: dbResponse.total_cured,
+    totalActive: dbResponse.total_active,
+    totalDeaths: dbResponse.total_deaths,
+  };
+};
+
+let convertStateNameToResponseObject = (dbResponse) => {
+  return {
+    stateName: dbResponse.state_name,
+  };
+};
+
+let initializationDbToServer = async () => {
   try {
     db = await open({
       filename: dbPath,
       driver: sqlite3.Database,
     });
     app.listen(3000, () => {
-      console.log("Server Running at http://localhost:3000/");
+      console.log("Server is Running at http://localhost:3000/");
     });
   } catch (e) {
-    console.log(`DB Error: ${e.message}`);
+    console.log(`Db Error:${e.message}`);
     process.exit(1);
   }
 };
 
-initializeDbAndServer();
+initializationDbToServer();
 
 //API-1
 
-app.get("/players/", async (request, response) => {
-  let getAllPlayersQuery = `SELECT * FROM player_details;`;
-  let dbResponse = await db.all(getAllPlayersQuery);
-  /*console.log(
-    dbResponse.map((eachItem) => convertDbObjectToResponseObject(eachItem))
-  );*/
-  response.send(
-    dbResponse.map((eachItem) => convertDbObjectToResponseObject(eachItem))
+app.get("/states/", async (request, response) => {
+  let listOfStates = `SELECT * FROM state`;
+  let dbResponse = await db.all(listOfStates);
+  let responseObject = dbResponse.map((eachItem) =>
+    convertDbObjectToResponseObject(eachItem)
   );
+  //console.log(responseObject);
+  response.send(responseObject);
 });
 
 //API-2
 
-app.get("/players/:playerId/", async (request, response) => {
-  let { playerId } = request.params;
-  let getAllPlayersQuery = `SELECT player_id AS playerId,player_name AS playerName
-   FROM player_details
-   WHERE player_id = ${playerId};`;
-  let dbResponse = await db.get(getAllPlayersQuery);
+app.get("/states/:stateId/", async (request, response) => {
+  let { stateId } = request.params;
+  let StateWithId = `SELECT * FROM state
+  WHERE 
+    state_id = ${stateId}`;
+  let dbResponse = await db.all(StateWithId);
   //console.log(dbResponse);
-  response.send(dbResponse);
+  let responseObject = dbResponse.map((eachItem) =>
+    convertDbObjectToResponseObject(eachItem)
+  );
+  //console.log(responseObject);
+  response.send(responseObject[0]);
 });
 
 //API-3
 
-app.put("/players/:playerId/", async (request, response) => {
-  let { playerId } = request.params;
-  let { playerName } = request.body;
-  let updatePlayersQuery = `UPDATE player_details
-   SET  player_name = "${playerName}"
-   WHERE player_id = ${playerId};`;
-  let dbResponse = await db.run(updatePlayersQuery);
+app.post("/districts/", async (request, response) => {
+  let { districtName, stateId, cases, cured, active, deaths } = request.body;
+  const districtStatusQuery = `INSERT INTO district(district_name,state_id,cases,cured,active,deaths)
+        VALUES("${districtName}",
+            ${stateId},
+            ${cases},
+            ${cured},
+            ${active},
+            ${deaths}
+            );`;
+  let dbResponse = await db.run(districtStatusQuery);
   //console.log(dbResponse);
-  response.send("Player Details Updated");
+  response.send("District Successfully Added");
 });
 
 //API-4
 
-app.get("/matches/:matchId/", async (request, response) => {
-  let { matchId } = request.params;
-  let getAllMatchDetailsQuery = `SELECT match_id AS matchId ,match,year
-   FROM match_details
-   WHERE match_id = ${matchId};`;
-  let dbResponse = await db.get(getAllMatchDetailsQuery);
-  //console.log(dbResponse);
-  response.send(dbResponse);
+app.get("/districts/:districtId/", async (request, response) => {
+  let { districtId } = request.params;
+  let specificDistrictQuery = `SELECT * FROM district
+    WHERE 
+        district_id = ${districtId}`;
+  let dbResponse = await db.all(specificDistrictQuery);
+  let responseObject = dbResponse.map((eachItem) =>
+    convertDbDictObjectToResponseDictObject(eachItem)
+  );
+  //console.log(responseObject);
+  response.send(responseObject[0]);
 });
 
 //API-5
 
-app.get("/players/:playerId/matches/", async (request, response) => {
-  let { playerId } = request.params;
-  let matchesOfPlayerQuery = `SELECT *
-  FROM 
-    match_details NATURAL JOIN player_match_score
-  WHERE 
-    player_id = ${playerId};`;
-  let dbResponse = await db.all(matchesOfPlayerQuery);
+app.delete("/districts/:districtId/", async (request, response) => {
+  let { districtId } = request.params;
+  let deleteDistrictQuery = `DELETE FROM district
+    WHERE 
+        district_id = ${districtId}`;
+  let dbResponse = await db.run(deleteDistrictQuery);
   //console.log(dbResponse);
-  //console.log(dbResponse.map((eachItem) => convertingDbObjToresObj(eachItem)));
-  response.send(
-    dbResponse.map((eachItem) => convertingDbObjToresObj(eachItem))
-  );
+  response.send("District Removed");
 });
 
 //API-6
 
-app.get("/matches/:matchId/players/", async (request, response) => {
-  let { matchId } = request.params;
-  let allPlayersOfSpecMatchQuery = `SELECT player_id AS playerId,player_name AS playerName
-   FROM player_details NATURAL JOIN player_match_score
-   WHERE match_id = ${matchId};`;
-  let dbResponse = await db.all(allPlayersOfSpecMatchQuery);
+app.put("/districts/:districtId/", async (request, response) => {
+  let { districtId } = request.params;
+  let { districtName, stateId, cases, cured, active, deaths } = request.body;
+  const updateDistrictDetailsQuery = `UPDATE district
+        SET 
+            district_name = "${districtName}",
+            state_id = ${stateId},
+            cases = ${cases},
+            cured = ${cured},
+            active = ${active},
+            deaths = ${deaths}
+            
+        WHERE 
+            district_id = ${districtId};`;
+  let dbResponse = await db.run(updateDistrictDetailsQuery);
   //console.log(dbResponse);
-  response.send(dbResponse);
+  response.send("District Details Updated");
 });
 
 //API-7
 
-app.get("/players/:playerId/playerScores", async (request, response) => {
-  let { playerId } = request.params;
-  let totalDetailsOfAPlayerQuery = `SELECT 
-        player_id AS playerId,
-        player_name AS playerName,
-        SUM(score) AS totalScore,
-        SUM(fours) AS totalFours,
-        SUM(sixes) AS totalSixes
-   FROM 
-        player_match_score NATURAL JOIN player_details
-   
-   GROUP BY
-        player_id = ${playerId}
-   HAVING
-        player_id =  ${playerId};`;
-  let dbResponse = await db.get(totalDetailsOfAPlayerQuery);
-  //console.log(dbResponse);
-  response.send(dbResponse);
+app.get("/states/:stateId/stats/", async (request, response) => {
+  let { stateId } = request.params;
+  let totalDictsOfState = `SELECT district_name,SUM(cases)AS total_cases,SUM(cured)AS total_cured,SUM(active)As total_active,SUM(deaths)As total_deaths
+    FROM district
+    WHERE state_id = ${stateId}
+    GROUP BY state_id;`;
+  let dbResponse = await db.get(totalDictsOfState);
+  //console.log(conTotalDictsOfStateToResObject(dbResponse));
+  response.send(conTotalDictsOfStateToResObject(dbResponse));
+});
+
+//API-8
+
+app.get("/districts/:districtId/details/", async (request, response) => {
+  let { districtId } = request.params;
+  let findStateName = `SELECT state_name
+    FROM state NATURAL JOIN district
+    WHERE district_id= ${districtId};`;
+  let dbResponse = await db.get(findStateName);
+  //console.log(convertStateNameToResponseObject(dbResponse));
+  response.send(convertStateNameToResponseObject(dbResponse));
 });
 
 module.exports = app;
